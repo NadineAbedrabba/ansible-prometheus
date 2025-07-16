@@ -1,0 +1,28 @@
+---
+- name: Importer dynamiquement les dashboards Grafana liés aux groupes
+  hosts: grafana
+  become: false
+  vars_files:
+    - ../group_vars/grafana/dashboards.yml
+  tasks:
+    - name: Importer dashboard si le groupe associé est présent dans l'inventaire
+      uri:
+        url: "{{ grafana_api }}/api/dashboards/db"
+        method: POST
+        user: "{{ grafana_admin_user }}"
+        password: "{{ grafana_admin_password }}"
+        body_format: json
+        headers:
+          Content-Type: application/json
+        body: >-
+          {{
+            {
+              "dashboard": lookup('file', 'files/dashboards/' + item.file) | from_json,
+              "overwrite": true,
+              "folderId": 0
+            }
+          }}
+        status_code: [200, 202]
+        force_basic_auth: yes
+      loop: "{{ grafana_dashboards }}"
+      when: item.groups | intersect(groups.keys()) | length > 0

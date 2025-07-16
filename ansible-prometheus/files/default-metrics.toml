@@ -1,0 +1,19 @@
+
+
+[[metric]]
+context = "database"
+labels = ["DATABASE_NAME"]
+request = "SELECT name as DATABASE_NAME FROM v$database"
+metricsdesc = {DATABASE_NAME="The name of the database"}
+
+[[metric]]
+context = "session"
+labels = ["STATUS"]
+request = "SELECT status, count(*) as value FROM v$session GROUP BY status"
+metricsdesc = {value="Number of sessions by status"}
+
+[[metric]]
+context = "instance"
+labels = ["INSTANCE_NAME"]
+request = "SELECT instance_name AS INSTANCE_NAME FROM v$instance"
+metricsdesc = {INSTANCE_NAME="The name of the Oracle instance"}

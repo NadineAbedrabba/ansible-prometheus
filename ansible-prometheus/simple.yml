@@ -1,0 +1,21 @@
+---
+- hosts: oracle_vm
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_python_interpreter: /usr/local/bin/python3.10
+    ansible_become_python_interpreter: /usr/local/bin/python3.10
+    ansible_shell_executable: /bin/bash
+
+  tasks:
+    - name: Afficher la version python
+      command: python --version
+      register: python_ver
+
+    - debug:
+        var: python_ver.stdout
+
+    - name: Installer curl via yum
+      yum:
+        name: curl
+        state: present

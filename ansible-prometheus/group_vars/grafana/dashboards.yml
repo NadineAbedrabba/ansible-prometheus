@@ -1,0 +1,12 @@
+grafana_dashboards:
+  - name: "Node Exporter"
+    file: "node_exporter_dashboard.json"
+    groups: ["node_exporter"]
+
+  - name: "Oracle Exporter"
+    file: "oracle_exporter_dashboard.json"
+    groups: ["oracle_exporter"]
+
+  - name: "Windows Exporter"
+    file: "windows_exporter_dashboard.json"
+    groups: ["windows_exporters"]

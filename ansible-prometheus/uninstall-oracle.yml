@@ -1,0 +1,35 @@
+---
+- name: Désinstaller OracleDB Exporter
+  hosts: oracle_exporter
+  become: yes
+
+  tasks:
+    - name: Arrêter le service
+      systemd:
+        name: oracledb_exporter
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: Supprimer le fichier binaire
+      file:
+        path: /usr/local/bin/oracledb_exporter
+        state: absent
+
+    - name: Supprimer le fichier de configuration
+      file:
+        path: /etc/oracledb_exporter-metrics.toml
+        state: absent
+
+    - name: Supprimer le service systemd
+      file:
+        path: /etc/systemd/system/oracledb_exporter.service
+        state: absent
+
+    - name: Supprimer le contexte SELinux
+      command: semanage fcontext -d -t bin_t /usr/local/bin/oracledb_exporter
+      ignore_errors: yes
+
+    - name: Recharger systemd
+      systemd:
+        daemon_reload: yes

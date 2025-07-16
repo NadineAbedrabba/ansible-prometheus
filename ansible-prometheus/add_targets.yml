@@ -1,0 +1,24 @@
+---
+- name: Ajouter dynamiquement de nouveaux targets Prometheus
+  hosts: prometheus
+  become: yes
+
+  vars:
+    prometheus_dir: /etc/prometheus
+    prometheus_user: prometheus
+
+  tasks:
+    - name: Générer un nouveau prometheus.yml avec les nouveaux targets
+      template:
+        src: templates/prometheus.yml.j2
+        dest: "{{ prometheus_dir }}/prometheus.yml"
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_user }}"
+        mode: '0644'
+      notify: Reload Prometheus
+
+  handlers:
+    - name: Reload Prometheus
+      systemd:
+        name: prometheus
+        state: restarted

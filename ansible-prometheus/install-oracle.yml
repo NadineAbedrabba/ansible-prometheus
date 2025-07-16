@@ -1,0 +1,108 @@
+---
+- name: Installer OracleDB Exporter (iamseth 0.3.0rc1-ora18.5)
+  hosts: oracle_exporter
+  become: yes
+  vars:
+    github_release_tag: "0.3.0rc1"
+    archive_name: "oracledb_exporter.0.3.0rc1-ora18.5.linux-amd64.tar.gz"
+    extract_dir: "/tmp/oracledb_exporter.0.3.0rc1-ora18.5.linux-amd64"
+    config_file_path: "/etc/oracledb_exporter-metrics.toml"
+    bin_path: "/usr/local/bin/oracledb_exporter"
+
+
+  tasks:
+  
+    - name: Vérifier si OracleDB Exporter est déjà installé
+      stat:
+        path: "{{ bin_path }}"
+      register: oracledb_bin
+    
+    - name: Télécharger OracleDB Exporter
+      get_url:
+        url: "https://github.com/iamseth/oracledb_exporter/releases/download/{{ github_release_tag }}/{{ archive_name }}"
+        dest: "/tmp/{{ archive_name }}"
+      when: not oracledb_bin.stat.exists
+
+
+    - name: Extraire l'archive
+      unarchive:
+        src: "/tmp/{{ archive_name }}"
+        dest: /tmp
+        remote_src: yes
+      when: not oracledb_bin.stat.exists
+
+
+    - name: Copier l'exécutable dans /usr/local/bin
+      command: mv {{ extract_dir }}/oracledb_exporter /usr/local/bin/oracledb_exporter
+      args:
+        creates: /usr/local/bin/oracledb_exporter
+      when: not oracledb_bin.stat.exists
+ 
+    - name: Copier le fichier de configuration metrics
+      copy:
+        src: "{{ extract_dir }}/default-metrics.toml"
+        dest: "{{ config_file_path }}"
+        remote_src: yes
+      when: not oracledb_bin.stat.exists    
+      
+    - name: Rendre le binaire exécutable
+      file:
+        path: /usr/local/bin/oracledb_exporter
+        mode: '0755'
+
+    - name: Installer policycoreutils-python-utils (pour semanage)
+      become: yes
+      command: dnf install -y policycoreutils-python-utils
+      when: not oracledb_bin.stat.exists
+
+    - name: Ajouter contexte SELinux
+      command: semanage fcontext -a -t bin_t /usr/local/bin/oracledb_exporter
+      ignore_errors: yes
+      when: not oracledb_bin.stat.exists
+
+    - name: Appliquer le contexte SELinux
+      command: restorecon -v /usr/local/bin/oracledb_exporter
+      when: not oracledb_bin.stat.exists
+      
+    - name: Créer le service systemd
+      copy:
+        dest: /etc/systemd/system/oracledb_exporter.service
+        content: |
+          [Unit]
+          Description=OracleDB Exporter
+          After=network.target
+
+          [Service]
+          ExecStart=/usr/local/bin/oracledb_exporter --default.metrics=/etc/oracledb_exporter-metrics.toml
+          User=nobody
+          Restart=on-failure
+          Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/u01/app/oracle/product/19.3.0/dbhome_1/bin
+          Environment=LD_LIBRARY_PATH=/u01/app/oracle/product/19.3.0/dbhome_1/lib
+          Environment=ORACLE_HOME=/u01/app/oracle/product/19.3.0/dbhome_1
+
+
+          [Install]
+          WantedBy=multi-user.target
+    - name: Recharger systemd immédiatement
+      systemd:
+        daemon_reload: yes
+
+    - name: Activer et démarrer le service
+      systemd:
+        name: oracledb_exporter
+        enabled: yes
+        state: started
+
+    - name: Nettoyer les fichiers temporaires
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/{{ archive_name }}"
+        - "{{ extract_dir }}"
+      when: not oracledb_bin.stat.exists
+      
+  handlers:
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes

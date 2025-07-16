@@ -1,0 +1,103 @@
+---
+- name: Installer Prometheus sur une VM distante
+  hosts: prometheus
+  become: yes
+  vars:
+    prometheus_version: "2.52.0"
+    prometheus_user: "prometheus"
+    prometheus_dir: "/etc/prometheus"
+    prometheus_data_dir: "/var/lib/prometheus"
+    prometheus_port: 9090
+
+  tasks:
+    - name: Créer l'utilisateur Prometheus
+      user:
+        name: "{{ prometheus_user }}"
+        shell: /sbin/nologin
+
+    - name: Télécharger Prometheus
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/prometheus.tar.gz"
+
+    - name: Extraire Prometheus
+      unarchive:
+        src: "/tmp/prometheus.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+
+    - name: Copier les fichiers binaires
+      copy:
+        remote_src: yes
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        mode: '0755'
+      loop:
+        - prometheus
+        - promtool
+
+    - name: Créer les répertoires de configuration
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_user }}"
+        mode: '0755'
+      loop:
+        - "{{ prometheus_dir }}"
+        - "{{ prometheus_data_dir }}"
+
+    - name: Copier les fichiers de configuration
+      copy:
+        remote_src: yes
+        src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/{{ item }}"
+        dest: "{{ prometheus_dir }}/{{ item }}"
+      loop:
+        - consoles
+        - console_libraries
+
+    - name: Créer le fichier prometheus.yml dynamique
+      template:
+        src: prometheus.yml.j2
+        dest: "{{ prometheus_dir }}/prometheus.yml"
+        owner: "{{ prometheus_user }}"
+        group: "{{ prometheus_user }}"
+        mode: '0644'
+      notify: Reload Prometheus
+
+    - name: Créer le service systemd
+      copy:
+        dest: /etc/systemd/system/prometheus.service
+        content: |
+          [Unit]
+          Description=Prometheus
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User={{ prometheus_user }}
+          Group={{ prometheus_user }}
+          Type=simple
+          ExecStart=/usr/local/bin/prometheus \
+            --config.file={{ prometheus_dir }}/prometheus.yml \
+            --storage.tsdb.path={{ prometheus_data_dir }} \
+            --web.listen-address=:{{ prometheus_port }}  \
+            --web.enable-lifecycle
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Démarrer Prometheus
+      systemd:
+        name: prometheus
+        enabled: yes
+        state: started
+
+
+  handlers:
+    - name: Reload Prometheus
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/-/reload"
+        method: POST
+        status_code: 200
+      when: ansible_facts['distribution'] is defined
